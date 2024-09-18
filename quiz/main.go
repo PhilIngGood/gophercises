@@ -1,55 +1,85 @@
 package main
 
 import (
-	"encoding/csv"
+	"bufio"
+	"flag"
 	"fmt"
-	"log"
 	"os"
+	"strings"
+	"time"
 )
 
-const filename = "problems.csv"
+//const filename = "problems.csv"
+//const timeDuration = 5
+
+type problem struct {
+	question string
+	answer   string
+}
+
+type quiz struct {
+	problems []problem
+	score    int
+}
 
 func main() {
-	content := readCSV(filename)
 
-	var correctAnswers int
+	filename := flag.String("filename", "problems.csv", "CSV File that conatins quiz questions")
+	timeLimit := flag.Int("limit", 30, "Time Limit for each question")
+	flag.Parse()
 
-	for i, v := range content {
-		askQuestion(i, v[0])
-		if parseAnswer(v[1]) {
-			correctAnswers += 1
+	quiz := quiz{}
+	populateQuiz(&quiz, *filename)
+
+	timer := time.NewTimer(time.Second * time.Duration(*timeLimit))
+	defer timer.Stop()
+
+	quizOver := false
+
+	go func() {
+		<-timer.C
+		fmt.Println("Time's up !")
+		quizOver = true
+	}()
+
+	for index, problem := range quiz.problems {
+		fmt.Printf("Question %v: %v\n", index+1, problem.question)
+		var answer string
+		fmt.Print("Answer: ")
+		fmt.Scan(&answer)
+
+		if quizOver {
+			break
+		}
+
+		if answer == problem.answer {
+			quiz.score += 1
 		}
 	}
+	fmt.Printf("You answered %v questions correclty out of %v", quiz.score, len(quiz.problems))
 
-	log.Printf("You answered correclty to %v out of %v questions\n", correctAnswers, len(content))
 }
 
-func readCSV(filename string) [][]string {
-	file, err := os.Open(filename)
+func newProblem(q string, a string) problem {
+	return problem{
+		question: q,
+		answer:   a,
+	}
+}
+
+func populateQuiz(q *quiz, f string) {
+	file, err := os.Open(f)
+
 	if err != nil {
-		log.Fatal("file not found")
+		panic(err.Error())
 	}
 	defer file.Close()
+	scanner := bufio.NewScanner(file)
 
-	reader := csv.NewReader(file)
-	content, err := reader.ReadAll()
-
-	if err != nil {
-		log.Println("error reading file")
+	for scanner.Scan() {
+		line := strings.Split(scanner.Text(), ",")
+		p := newProblem(line[0], line[1])
+		q.problems = append(q.problems, p)
 	}
-	return content
+
 }
-
-func askQuestion(index int, value string) {
-	fmt.Printf("Question %v: %v\n", index+1, value)
-}
-
-func parseAnswer(value string) bool {
-	var answer string
-	fmt.Print("Anwser: ")
-	fmt.Scan(&answer)
-
-	return answer == value
-}
-
-// TODO : add timer & trim answers
